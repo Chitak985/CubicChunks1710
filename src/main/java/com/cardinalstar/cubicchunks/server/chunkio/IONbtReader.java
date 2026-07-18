@@ -70,6 +70,10 @@ public class IONbtReader {
             return null;
         }
 
+        column.isLightPopulated = nbt.getBoolean("LightPopulated");
+
+        readOpacityIndex(level, column);
+
         if (!Mods.ChunkAPI.isModLoaded()) {
             readBiomes(level, column);
         } else {
@@ -84,15 +88,15 @@ public class IONbtReader {
     }
 
     @Nullable
-    private static Chunk readBaseColumn(World world, int x, int z, NBTTagCompound nbt) {// check the version number
-        byte version = nbt.getByte("v");
+    private static Chunk readBaseColumn(World world, int x, int z, NBTTagCompound level) {// check the version number
+        byte version = level.getByte("v");
         if (version != 1) {
             throw new IllegalArgumentException(String.format("Column has wrong version: %d", version));
         }
 
         // check the coords
-        int xCheck = nbt.getInteger("x");
-        int zCheck = nbt.getInteger("z");
+        int xCheck = level.getInteger("x");
+        int zCheck = level.getInteger("z");
         if (xCheck != x || zCheck != z) {
             CubicChunks.LOGGER.warn(
                 String.format(

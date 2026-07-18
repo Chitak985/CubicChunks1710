@@ -44,11 +44,15 @@ dependencies {
     compileOnly('org.projectlombok:lombok:1.18.34')
     annotationProcessor('org.projectlombok:lombok:1.18.34')
 
+    shadowImplementation("at.yawk.lz4:lz4-java:1.11.0")
+
+    runtimeOnlyNonPublishable("com.github.GTNewHorizons:Angelica:2.1.54:dev")
+
     // ========================= Compat Deps ========================= //
 
     compileOnly("com.falsepattern:chunkapi-mc1.7.10:0.8.1:dev")
-    compileOnly("com.falsepattern:endlessids-mc1.7.10:1.7.1:dev")
-    compileOnly("ganymedes01.etfuturum:Et-Futurum-Requiem:2.6.2.21-GTNH-daily:dev")
+    compileOnly("com.falsepattern:endlessids-mc1.7.10:1.7.4:dev")
+    implementation("ganymedes01.etfuturum:Et-Futurum-Requiem:2.6.48-GTNH:dev")
 
     // ========================= Test Deps ========================= //
     devOnlyNonPublishable("com.github.GTNewHorizons:NotEnoughItems:2.8.125-GTNH:dev")
