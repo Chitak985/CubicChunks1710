@@ -71,7 +71,7 @@ class IONbtWriter {
         writeOpacityIndex(column, level);
 
         if (Mods.ChunkAPI.isModLoaded()) {
-            DataRegistryImpl.writeChunkToNBT(column, columnNbt);
+            DataRegistryImpl.writeChunkToNBT(column, level);
         } else {
             writeBiomes(column, level);
         }
@@ -118,7 +118,7 @@ class IONbtWriter {
         nbt.setInteger("z", column.zPosition);
 
         // column properties
-        nbt.setByte("v", (byte) 1);
+        nbt.setByte("v", (byte) 2);
         nbt.setLong("InhabitedTime", column.inhabitedTime);
     }
 
