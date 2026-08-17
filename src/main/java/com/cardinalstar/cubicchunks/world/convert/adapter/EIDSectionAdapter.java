@@ -1,11 +1,10 @@
 package com.cardinalstar.cubicchunks.world.convert.adapter;
 
 import java.nio.ByteBuffer;
+import java.nio.ShortBuffer;
 
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.world.chunk.NibbleArray;
-
-import lombok.val;
 
 public class EIDSectionAdapter implements SectionAdapter {
 
@@ -104,6 +103,7 @@ public class EIDSectionAdapter implements SectionAdapter {
 
                     if (m2Out == null) {
                         m2Out = new byte[4096];
+                        section.setByteArray("Data2", m2Out);
                     }
 
                     m2Out[CubeData.index(x, y, z)] = (byte) (meta & 0xFF);
@@ -139,8 +139,8 @@ public class EIDSectionAdapter implements SectionAdapter {
     @Override
     public void readSectionData(NBTTagCompound section, CubeData data) {
         if (section.hasKey("Block16")) {
-            val blocks16 = section.getByteArray("Blocks16");
-            val blocksShort = new short[blocks16.length >>> 1];
+            var blocks16 = section.getByteArray("Blocks16");
+            var blocksShort = new short[blocks16.length >>> 1];
             ByteBuffer.wrap(blocks16).asShortBuffer().get(blocksShort);
 
             for (int i = 0; i < blocksShort.length; i++) {
@@ -151,8 +151,8 @@ public class EIDSectionAdapter implements SectionAdapter {
         }
 
         if (section.hasKey("Data16")) {
-            val data16 = section.getByteArray("Blocks16");
-            val dataShort = new short[data16.length >>> 1];
+            var data16 = section.getByteArray("Data16");
+            var dataShort = new short[data16.length >>> 1];
             ByteBuffer.wrap(data16).asShortBuffer().get(dataShort);
 
             for (int i = 0; i < dataShort.length; i++) {
@@ -183,57 +183,87 @@ public class EIDSectionAdapter implements SectionAdapter {
     }
 
     private static void readMeta(NBTTagCompound section, CubeData data) {
-        NibbleArray m1LowIn = new NibbleArray(section.getByteArray("Data"), 4);
-        NibbleArray m1HighIn = section.hasKey("Data1High", 7) ? new NibbleArray(section.getByteArray("Data1High"), 4) : null;
-        byte[] m2In = section.hasKey("Data2", 7) ? section.getByteArray("Data2") : null;
+        if (section.hasKey("Data16")) {
+            ShortBuffer blocks = ByteBuffer.wrap(section.getByteArray("Data16")).asShortBuffer();
 
-        for (int y = 0; y < 16; y++) {
-            for (int z = 0; z < 16; z++) {
-                for (int x = 0; x < 16; x++) {
-                    int index = CubeData.index(x, y, z);
+            for (int y = 0; y < 16; y++) {
+                for (int z = 0; z < 16; z++) {
+                    for (int x = 0; x < 16; x++) {
+                        int index = CubeData.index(x, y, z);
 
-                    int meta = m1LowIn.get(x, y, z);
-
-                    if (m1HighIn != null) {
-                        meta |= m1HighIn.get(x, y, z) << 4;
+                        data.meta[index] = blocks.get(index);
                     }
-
-                    if (m2In != null) {
-                        meta |= (m2In[index] & 0xFF) << 8;
-                    }
-
-                    data.meta[index] = meta;
                 }
             }
-        }
+        } else {
+            NibbleArray m1LowIn = new NibbleArray(section.getByteArray("Data"), 4);
+            NibbleArray m1HighIn = section.hasKey("Data1High", 7)
+                ? new NibbleArray(section.getByteArray("Data1High"), 4)
+                : null;
+            byte[] m2In = section.hasKey("Data2", 7) ? section.getByteArray("Data2") : null;
+
+            for (int y = 0; y < 16; y++) {
+                for (int z = 0; z < 16; z++) {
+                    for (int x = 0; x < 16; x++) {
+                        int index = CubeData.index(x, y, z);
+
+                        int meta = m1LowIn.get(x, y, z);
+
+                        if (m1HighIn != null) {
+                            meta |= m1HighIn.get(x, y, z) << 4;
+                        }
+
+                        if (m2In != null) {
+                            meta |= (m2In[index] & 0xFF) << 8;
+                        }
+
+                        data.meta[index] = meta;
+                    }
+                }
+            }
+    }
     }
 
     private static void readEIDBlockIds(NBTTagCompound section, CubeData data) {
-        byte[] lsbIn = section.getByteArray("Blocks");
-        NibbleArray msbIn = section.hasKey("Add", 7) ? new NibbleArray(section.getByteArray("Add"), 4) : null;
-        NibbleArray b2HighIn = section.hasKey("BlocksB2Hi", 7) ? new NibbleArray(section.getByteArray("BlocksB2Hi"), 4) : null;
-        byte[] b3In = section.hasKey("BlocksB3", 7) ? section.getByteArray("BlocksB3") : null;
+        if (section.hasKey("Blocks16")) {
+            ShortBuffer blocks = ByteBuffer.wrap(section.getByteArray("Blocks16")).asShortBuffer();
 
-        for (int y = 0; y < 16; y++) {
-            for (int z = 0; z < 16; z++) {
-                for (int x = 0; x < 16; x++) {
-                    int index = CubeData.index(x, y, z);
+            for (int y = 0; y < 16; y++) {
+                for (int z = 0; z < 16; z++) {
+                    for (int x = 0; x < 16; x++) {
+                        int index = CubeData.index(x, y, z);
 
-                    int blockId = lsbIn[index] & 0xFF;
-
-                    if (msbIn != null) {
-                        blockId |= msbIn.get(x, y, z) << 8;
+                        data.blocks[index] = blocks.get(index);
                     }
+                }
+            }
+        } else {
+            byte[] lsbIn = section.getByteArray("Blocks");
+            NibbleArray msbIn = section.hasKey("Add", 7) ? new NibbleArray(section.getByteArray("Add"), 4) : null;
+            NibbleArray b2HighIn = section.hasKey("BlocksB2Hi", 7) ? new NibbleArray(section.getByteArray("BlocksB2Hi"), 4) : null;
+            byte[] b3In = section.hasKey("BlocksB3", 7) ? section.getByteArray("BlocksB3") : null;
 
-                    if (b2HighIn != null) {
-                        blockId |= b2HighIn.get(x, y, z) << 12;
+            for (int y = 0; y < 16; y++) {
+                for (int z = 0; z < 16; z++) {
+                    for (int x = 0; x < 16; x++) {
+                        int index = CubeData.index(x, y, z);
+
+                        int blockId = lsbIn[index] & 0xFF;
+
+                        if (msbIn != null) {
+                            blockId |= msbIn.get(x, y, z) << 8;
+                        }
+
+                        if (b2HighIn != null) {
+                            blockId |= b2HighIn.get(x, y, z) << 12;
+                        }
+
+                        if (b3In != null) {
+                            blockId |= (b3In[index] & 0xFF) << 16;
+                        }
+
+                        data.blocks[index] = blockId;
                     }
-
-                    if (b3In != null) {
-                        blockId |= (b3In[index] & 0xFF) << 16;
-                    }
-
-                    data.blocks[index] = blockId;
                 }
             }
         }

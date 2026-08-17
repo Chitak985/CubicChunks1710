@@ -25,12 +25,14 @@ import net.minecraft.world.chunk.storage.RegionFile;
 import com.cardinalstar.cubicchunks.api.ICube;
 import com.cardinalstar.cubicchunks.api.world.storage.ICubicStorage;
 import com.cardinalstar.cubicchunks.api.world.storage.ICubicStorage.NBTBatch;
+import com.cardinalstar.cubicchunks.api.world.storage.StorageFormatFactory;
 import com.cardinalstar.cubicchunks.server.chunkio.RegionCubeStorage;
 import com.cardinalstar.cubicchunks.util.CubePos;
-import com.cardinalstar.cubicchunks.world.convert.adapter.AdapterDiscovery;
 import com.cardinalstar.cubicchunks.world.convert.adapter.CubeData;
 import com.cardinalstar.cubicchunks.world.convert.adapter.SectionAdapter;
-import com.cardinalstar.cubicchunks.world.core.ServerHeightMap;
+import com.cardinalstar.cubicchunks.world.convert.adapter.SectionAdapterDiscovery;
+import com.cardinalstar.cubicchunks.world.convert.adapter.biome.BiomeAdapter;
+import com.cardinalstar.cubicchunks.world.convert.adapter.biome.BiomeAdapterDiscovery;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
 
 /**
@@ -43,23 +45,18 @@ import com.cardinalstar.cubicchunks.world.cube.Cube;
 @ParametersAreNonnullByDefault
 public final class VanillaToCCConverter implements IWorldConverter {
 
-    /**
-     * Serialised form of an empty {@link ServerHeightMap}.
-     * Used as the OpacityIndex for all converted columns so that CC recomputes
-     * the height map on first load ({@code isSurfaceTracked = false}).
-     */
-    private static byte[] emptyOpacityIndex = null;
-
     /** Vanilla chunk Level keys that are explicitly handled; all others are preserved as-is. */
     private static final Set<String> VANILLA_CHUNK_LEVEL_KEYS = new HashSet<>(Arrays.asList(
         "V", "xPos", "zPos", "LastUpdate", "TerrainPopulated", "LightPopulated",
         "InhabitedTime", "Biomes", "HeightMap", "Sections", "Entities", "TileEntities", "TileTicks"
     ));
 
-    private final SectionAdapter writeAdapter;
+    private final SectionAdapter sectionWriteAdapter;
+    private final BiomeAdapter biomeWriteAdapter;
 
-    public VanillaToCCConverter(SectionAdapter writeAdapter) {
-        this.writeAdapter = writeAdapter;
+    public VanillaToCCConverter(SectionAdapter sectionWriteAdapter, BiomeAdapter biomeWriteAdapter) {
+        this.sectionWriteAdapter = sectionWriteAdapter;
+        this.biomeWriteAdapter = biomeWriteAdapter;
     }
 
     @Override
@@ -127,8 +124,14 @@ public final class VanillaToCCConverter implements IWorldConverter {
         if (isOverworld) {
             Path worldFormat = dimensionRoot.toPath().resolve("data").resolve("cubicchunks.world_format.dat");
 
-            if (Files.exists(worldFormat)) {
-                Files.delete(worldFormat);
+            NBTTagCompound saveData = new NBTTagCompound();
+            saveData.setString("format", StorageFormatFactory.DEFAULT.toString());
+
+            NBTTagCompound container = new NBTTagCompound();
+            container.setTag("data", saveData);
+
+            try (FileOutputStream fileoutputstream = new FileOutputStream(worldFormat.toFile())) {
+                CompressedStreamTools.writeCompressed(container, fileoutputstream);
             }
         }
 
@@ -182,12 +185,16 @@ public final class VanillaToCCConverter implements IWorldConverter {
 
     private NBTTagCompound buildColumnNbt(NBTTagCompound vanillaLevel, int chunkX, int chunkZ) {
         NBTTagCompound level = new NBTTagCompound();
-        level.setByte("v", (byte) 1);
+        level.setByte("v", (byte) 2);
         level.setInteger("x", chunkX);
         level.setInteger("z", chunkZ);
         level.setLong("InhabitedTime", vanillaLevel.getLong("InhabitedTime"));
-        level.setByteArray("Biomes", vanillaLevel.getByteArray("Biomes"));
-        level.setByteArray("OpacityIndex", getEmptyOpacityIndex());
+        // Don't bother copying the height map: it will be recalculated automatically
+
+        int[] biomes = new int[256];
+
+        BiomeAdapterDiscovery.detect(vanillaLevel).readBiomeData(vanillaLevel, biomes);
+        biomeWriteAdapter.writeBiomeData(biomes, level);
 
         copyUnknownTags(vanillaLevel, level, VANILLA_CHUNK_LEVEL_KEYS);
 
@@ -210,11 +217,11 @@ public final class VanillaToCCConverter implements IWorldConverter {
 
         if (vanillaSection != null) {
             CubeData cubeData = new CubeData();
-            AdapterDiscovery.detect(vanillaSection).readSectionData(vanillaSection, cubeData);
+            SectionAdapterDiscovery.detect(vanillaSection).readSectionData(vanillaSection, cubeData);
 
             NBTTagCompound sectionNbt = new NBTTagCompound();
-            copyUnknownTags(vanillaSection, sectionNbt, AdapterDiscovery.SECTION_MANAGED_KEYS);
-            writeAdapter.writeSectionData(cubeData, sectionNbt);
+            copyUnknownTags(vanillaSection, sectionNbt, SectionAdapterDiscovery.SECTION_MANAGED_KEYS);
+            sectionWriteAdapter.writeSectionData(cubeData, sectionNbt);
 
             NBTTagList sections = new NBTTagList();
             sections.appendTag(sectionNbt);
@@ -341,12 +348,5 @@ public final class VanillaToCCConverter implements IWorldConverter {
         try (FileOutputStream fos = new FileOutputStream(markerFile)) {
             CompressedStreamTools.writeCompressed(root, fos);
         }
-    }
-
-    private static byte[] getEmptyOpacityIndex() {
-        if (emptyOpacityIndex == null) {
-            emptyOpacityIndex = new ServerHeightMap(new int[ICube.SIZE * ICube.SIZE]).getData();
-        }
-        return emptyOpacityIndex;
     }
 }

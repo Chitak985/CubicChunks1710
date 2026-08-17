@@ -55,7 +55,6 @@ import com.cardinalstar.cubicchunks.world.core.IColumnInternal;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
 import com.cardinalstar.cubicchunks.world.heightmap.HeightMap3D;
 import com.falsepattern.chunk.internal.DataRegistryImpl;
-
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 
@@ -65,19 +64,22 @@ public class IONbtReader {
     @Nullable
     static Chunk readColumn(World world, int x, int z, NBTTagCompound nbt) {
         NBTTagCompound level = nbt.getCompoundTag("Level");
+
+        byte version = level.getByte("v");
+
         Chunk column = readBaseColumn(world, x, z, level);
         if (column == null) {
             return null;
         }
 
-        column.isLightPopulated = nbt.getBoolean("LightPopulated");
-
-        readOpacityIndex(level, column);
-
         if (!Mods.ChunkAPI.isModLoaded()) {
             readBiomes(level, column);
         } else {
-            DataRegistryImpl.readChunkFromNBT(column, nbt);
+            if (version == 1) {
+                DataRegistryImpl.readChunkFromNBT(column, nbt);
+            } else {
+                DataRegistryImpl.readChunkFromNBT(column, level);
+            }
         }
 
         readOpacityIndex(level, column);
@@ -88,12 +90,7 @@ public class IONbtReader {
     }
 
     @Nullable
-    private static Chunk readBaseColumn(World world, int x, int z, NBTTagCompound level) {// check the version number
-        byte version = level.getByte("v");
-        if (version != 1) {
-            throw new IllegalArgumentException(String.format("Column has wrong version: %d", version));
-        }
-
+    private static Chunk readBaseColumn(World world, int x, int z, NBTTagCompound level) {
         // check the coords
         int xCheck = level.getInteger("x");
         int zCheck = level.getInteger("z");
@@ -109,18 +106,18 @@ public class IONbtReader {
         }
 
         Chunk column = new Chunk(world, x, z);
-        column.inhabitedTime = nbt.getLong("InhabitedTime");
+        column.inhabitedTime = level.getLong("InhabitedTime");
+        column.isLightPopulated = level.getBoolean("LightPopulated");
         return column;
     }
 
-    private static void readBiomes(NBTTagCompound nbt, Chunk column) {
-        System.arraycopy(nbt.getByteArray("Biomes"), 0, column.getBiomeArray(), 0, Cube.SIZE * Cube.SIZE);
+    private static void readBiomes(NBTTagCompound level, Chunk column) {
+        System.arraycopy(level.getByteArray("Biomes"), 0, column.getBiomeArray(), 0, Cube.SIZE * Cube.SIZE);
     }
 
     private static void readOpacityIndex(NBTTagCompound nbt, Chunk chunk) {
         IHeightMap hmap = ((IColumn) chunk).getOpacityIndex();
         HeightMap3D heightMap3D = (HeightMap3D) hmap;
-        heightMap3D.setVanillaHeightMap(chunk.heightMap);
 
         if (nbt.hasKey("HeightMap3D", NBT.TAG_BYTE_ARRAY)) {
             heightMap3D.readData(new CCPacketBuffer(Unpooled.wrappedBuffer(nbt.getByteArray("HeightMap3D"))));

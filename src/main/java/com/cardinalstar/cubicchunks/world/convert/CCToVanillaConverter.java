@@ -1,12 +1,15 @@
 package com.cardinalstar.cubicchunks.world.convert;
 
+import static java.nio.file.Files.deleteIfExists;
+import static org.spongepowered.asm.util.Files.deleteRecursively;
+
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Arrays;
-import java.util.LinkedHashSet;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -18,19 +21,18 @@ import net.minecraft.nbt.NBTTagList;
 import net.minecraft.world.ChunkCoordIntPair;
 import net.minecraft.world.chunk.storage.RegionFileCache;
 
-import org.spongepowered.asm.util.Files;
-
+import com.cardinalstar.cubicchunks.CubicChunks;
 import com.cardinalstar.cubicchunks.api.ICube;
 import com.cardinalstar.cubicchunks.api.world.storage.ICubicStorage;
 import com.cardinalstar.cubicchunks.network.CCPacketBuffer;
 import com.cardinalstar.cubicchunks.server.chunkio.RegionCubeStorage;
 import com.cardinalstar.cubicchunks.util.CubePos;
-import com.cardinalstar.cubicchunks.util.Coords;
-import com.cardinalstar.cubicchunks.world.convert.adapter.AdapterDiscovery;
 import com.cardinalstar.cubicchunks.world.convert.adapter.CubeData;
 import com.cardinalstar.cubicchunks.world.convert.adapter.SectionAdapter;
-import com.cardinalstar.cubicchunks.world.core.ServerHeightMap;
-
+import com.cardinalstar.cubicchunks.world.convert.adapter.SectionAdapterDiscovery;
+import com.cardinalstar.cubicchunks.world.convert.adapter.biome.BiomeAdapter;
+import com.cardinalstar.cubicchunks.world.convert.adapter.biome.BiomeAdapterDiscovery;
+import com.cardinalstar.cubicchunks.world.heightmap.HeightMap3D;
 import io.netty.buffer.Unpooled;
 
 /**
@@ -50,13 +52,15 @@ public final class CCToVanillaConverter implements IWorldConverter {
 
     /** CC column Level keys that are explicitly handled; all others are preserved as-is. */
     private static final Set<String> CC_COLUMN_LEVEL_KEYS = new HashSet<>(Arrays.asList(
-        "v", "x", "z", "InhabitedTime", "Biomes", "OpacityIndex"
+        "v", "x", "z", "InhabitedTime", "Biomes", "Biomes16v2", "OpacityIndex", "HeightMap", "HeightMap3D"
     ));
 
-    private final SectionAdapter writeAdapter;
+    private final SectionAdapter sectionWriteAdapter;
+    private final BiomeAdapter biomeWriteAdapter;
 
-    public CCToVanillaConverter(SectionAdapter writeAdapter) {
-        this.writeAdapter = writeAdapter;
+    public CCToVanillaConverter(SectionAdapter sectionWriteAdapter, BiomeAdapter biomeWriteAdapter) {
+        this.sectionWriteAdapter = sectionWriteAdapter;
+        this.biomeWriteAdapter = biomeWriteAdapter;
     }
 
     @Override
@@ -88,8 +92,13 @@ public final class CCToVanillaConverter implements IWorldConverter {
             RegionFileCache.clearRegionFileReferences();
         }
 
-        Files.deleteRecursively(worldPath.resolve("region2d").toFile());
-        Files.deleteRecursively(worldPath.resolve("region3d").toFile());
+        deleteRecursively(worldPath.resolve("region2d").toFile());
+        deleteRecursively(worldPath.resolve("region3d").toFile());
+
+        if (isOverworld) {
+            deleteIfExists(worldPath.resolve("data").resolve("cubicChunksData.dat"));
+            deleteIfExists(worldPath.resolve("data").resolve("cubicchunks.world_format.dat"));
+        }
 
         progress.update(progress.getCompleted(), progress.getTotal(), "Done.");
     }
@@ -138,12 +147,12 @@ public final class CCToVanillaConverter implements IWorldConverter {
         if (!cubeSection.hasKey("Blocks")) return;
 
         CubeData cubeData = new CubeData();
-        AdapterDiscovery.detect(cubeSection).readSectionData(cubeSection, cubeData);
+        SectionAdapterDiscovery.detect(cubeSection).readSectionData(cubeSection, cubeData);
 
         NBTTagCompound section = new NBTTagCompound();
         section.setByte("Y", (byte) (cubeY & 0xFF));
-        copyUnknownTags(cubeSection, section, AdapterDiscovery.SECTION_MANAGED_KEYS);
-        writeAdapter.writeSectionData(cubeData, section);
+        copyUnknownTags(cubeSection, section, SectionAdapterDiscovery.SECTION_MANAGED_KEYS);
+        sectionWriteAdapter.writeSectionData(cubeData, section);
 
         sections.appendTag(section);
     }
@@ -158,10 +167,15 @@ public final class CCToVanillaConverter implements IWorldConverter {
         level.setInteger("zPos", chunkZ);
         level.setLong("LastUpdate", 0L);
         level.setBoolean("TerrainPopulated", true);
-        level.setBoolean("LightPopulated", false);
+        level.setBoolean("LightPopulated", columnLevel.getBoolean("LightPopulated"));
         level.setLong("InhabitedTime", columnLevel.getLong("InhabitedTime"));
-        level.setByteArray("Biomes", columnLevel.getByteArray("Biomes"));
-        level.setIntArray("HeightMap", buildHeightMap(columnLevel.getByteArray("OpacityIndex")));
+
+        int[] biomes = new int[256];
+
+        BiomeAdapterDiscovery.detect(columnLevel).readBiomeData(columnLevel, biomes);
+        biomeWriteAdapter.writeBiomeData(biomes, level);
+
+        level.setIntArray("HeightMap", buildHeightMap(columnLevel.getByteArray("HeightMap3D")));
         level.setTag("Sections", sections);
         level.setTag("Entities", entities);
         level.setTag("TileEntities", tileEntities);
@@ -172,9 +186,15 @@ public final class CCToVanillaConverter implements IWorldConverter {
         return level;
     }
 
-    private static void copyUnknownTags(NBTTagCompound src, NBTTagCompound dst, Set<String> exclude) {
+    private final HashSet<String> unknownTags = new HashSet<>();
+
+    private void copyUnknownTags(NBTTagCompound src, NBTTagCompound dst, Set<String> exclude) {
         for (String key : src.func_150296_c()) {
             if (!exclude.contains(key)) {
+                if (unknownTags.add(key)) {
+                    CubicChunks.LOGGER.warn("Copying unknown tag: {}", key);
+                }
+
                 dst.setTag(key, src.getTag(key).copy());
             }
         }
@@ -189,18 +209,10 @@ public final class CCToVanillaConverter implements IWorldConverter {
 
         if (opacityIndexData.length == 0) return heightMap;
 
-        ServerHeightMap hmap = new ServerHeightMap(new int[ICube.SIZE * ICube.SIZE]);
-        hmap.readData(new CCPacketBuffer(Unpooled.wrappedBuffer(opacityIndexData)));
+        HeightMap3D hmap = new HeightMap3D(heightMap, 256);
 
-        for (int lx = 0; lx < ICube.SIZE; lx++) {
-            for (int lz = 0; lz < ICube.SIZE; lz++) {
-                int topBlock = hmap.getTopBlockY(lx, lz);
-                // vanilla HeightMap = Y of first air block above surface
-                if (topBlock != Coords.NO_HEIGHT && topBlock >= 0) {
-                    heightMap[lz * ICube.SIZE + lx] = Math.min(255, topBlock + 1);
-                }
-            }
-        }
+        // Updates heightMap as a side effect
+        hmap.readData(new CCPacketBuffer(Unpooled.wrappedBuffer(opacityIndexData)));
 
         return heightMap;
     }

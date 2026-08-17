@@ -112,20 +112,16 @@ public class GuiConvertWorld extends GuiScreen implements GuiYesNoCallback {
 
         int targetY = height / 2 - 32;
 
-        if (currentFormat != WorldSaveFormat.CC) {
-            ccButton = new ToggleButton(BTN_CC, width / 2 - 100, targetY, 200, 20,
-                ConversionTarget.CC.getDisplayName());
-            ccButton.setSelected(selectedTarget == ConversionTarget.CC);
-            buttonList.add(ccButton);
-            targetY += 24;
-        }
+        ccButton = new ToggleButton(BTN_CC, width / 2 - 100, targetY, 200, 20,
+            ConversionTarget.CC.getDisplayName());
+        ccButton.setSelected(currentFormat == WorldSaveFormat.CC);
+        buttonList.add(ccButton);
+        targetY += 24;
 
-        if (currentFormat != WorldSaveFormat.VANILLA) {
-            vanillaButton = new ToggleButton(BTN_VANILLA, width / 2 - 100, targetY, 200, 20,
-                ConversionTarget.VANILLA.getDisplayName());
-            vanillaButton.setSelected(selectedTarget == ConversionTarget.VANILLA);
-            buttonList.add(vanillaButton);
-        }
+        vanillaButton = new ToggleButton(BTN_VANILLA, width / 2 - 100, targetY, 200, 20,
+            ConversionTarget.VANILLA.getDisplayName());
+        vanillaButton.setSelected(currentFormat == WorldSaveFormat.VANILLA);
+        buttonList.add(vanillaButton);
 
         int blockY = height / 2 + 36;
         blockVanillaButton = new ToggleButton(BTN_BLOCK_VANILLA, width / 2 - 100, blockY, 200, 20,

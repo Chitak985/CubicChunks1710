@@ -13,7 +13,7 @@ import net.minecraft.nbt.NBTTagCompound;
  * <p>{@link #detect} selects the correct adapter to use when reading a section
  * NBT compound by checking for EID-specific keys.
  */
-public class AdapterDiscovery {
+public class SectionAdapterDiscovery {
 
     /**
      * All NBT keys within a section compound that any {@link SectionAdapter} reads or writes,

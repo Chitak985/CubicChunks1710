@@ -22,8 +22,10 @@ import com.cardinalstar.cubicchunks.world.convert.ConversionProgress;
 import com.cardinalstar.cubicchunks.world.convert.IWorldConverter;
 import com.cardinalstar.cubicchunks.world.convert.VanillaToCCConverter;
 import com.cardinalstar.cubicchunks.world.convert.WorldSaveFormat;
-import com.cardinalstar.cubicchunks.world.convert.adapter.AdapterDiscovery;
+import com.cardinalstar.cubicchunks.world.convert.adapter.SectionAdapterDiscovery;
 import com.cardinalstar.cubicchunks.world.convert.adapter.SectionAdapter;
+import com.cardinalstar.cubicchunks.world.convert.adapter.biome.BiomeAdapter;
+import com.cardinalstar.cubicchunks.world.convert.adapter.biome.BiomeAdapterDiscovery;
 import it.unimi.dsi.fastutil.Pair;
 
 /**
@@ -59,14 +61,25 @@ public class GuiConvertProgress extends GuiScreen {
     }
 
     private IWorldConverter buildConverter(ConversionTarget target) {
-        SectionAdapter writeAdapter = blockFormat == BlockFormat.EID
-            ? AdapterDiscovery.eid()
-            : AdapterDiscovery.vanilla();
+        SectionAdapter sectionWriteAdapter = blockFormat == BlockFormat.EID
+            ? SectionAdapterDiscovery.eid()
+            : SectionAdapterDiscovery.vanilla();
+
+        BiomeAdapter biomeWriteAdapter = blockFormat == BlockFormat.EID
+            ? BiomeAdapterDiscovery.eid()
+            : BiomeAdapterDiscovery.vanilla();
+
         if (target == ConversionTarget.VANILLA) {
-            return new CCToVanillaConverter(writeAdapter);
+            return new CCToVanillaConverter(sectionWriteAdapter, biomeWriteAdapter);
+        } else {
+            return new VanillaToCCConverter(sectionWriteAdapter, biomeWriteAdapter);
         }
-        return new VanillaToCCConverter(writeAdapter);
     }
+
+    private static final String[] DIM_PREFIXES = {
+        "DIM",
+        "PERSONAL_DIM"
+    };
 
     @Override
     public void initGui() {
@@ -81,7 +94,15 @@ public class GuiConvertProgress extends GuiScreen {
 
             try(Stream<Path> stream = Files.list(worldDir.toPath())) {
                 stream.filter(Files::isDirectory)
-                    .filter(p -> p.getFileName().toString().startsWith("DIM"))
+                    .filter(p -> {
+                        var name = p.getFileName().toString();
+
+                        for (var prefix : DIM_PREFIXES) {
+                            if (name.startsWith(prefix)) return true;
+                        }
+
+                        return false;
+                    })
                     .forEach(p -> {
                         dims.add(Pair.of(p, p.getFileName().toString()));
                     });
