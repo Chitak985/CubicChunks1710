@@ -6,12 +6,14 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.UUID;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
+import com.cardinalstar.cubicchunks.util.ByteBufferOutputStream;
 import net.jpountz.lz4.LZ4Factory;
 import net.minecraft.nbt.CompressedStreamTools;
 import net.minecraft.nbt.NBTBase;
@@ -87,49 +89,49 @@ public class CCNBTUtils {
     public static ByteBuffer saveTag(NBTTagCompound tag, TagCompression compression) throws IOException {
         switch (compression) {
             case GZIP -> {
-                try (ByteArrayOutputStream nos = new ByteArrayOutputStream(getTagSizeEstimate(tag))) {
-                    try (DataOutputStream dos = new DataOutputStream(
-                        new BufferedOutputStream(new GZIPOutputStream2(nos)))) {
-                        CompressedStreamTools.write(tag, dos);
-                    }
+                ByteBufferOutputStream nos = new ByteBufferOutputStream(getTagSizeEstimate(tag));
 
-                    return ByteBuffer.wrap(nos.toByteArray())
-                        .order(ByteOrder.LITTLE_ENDIAN);
+                try (DataOutputStream dos = new DataOutputStream(
+                    new BufferedOutputStream(new GZIPOutputStream2(nos)))) {
+                    CompressedStreamTools.write(tag, dos);
                 }
+
+                return nos.toByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
             }
             case LZ4 -> {
-                try (ByteArrayOutputStream nos = new ByteArrayOutputStream(getTagSizeEstimate(tag))) {
-                    try (DataOutputStream dos = new DataOutputStream(nos)) {
-                        CompressedStreamTools.write(tag, dos);
-                    }
+                ByteBufferOutputStream nos = new ByteBufferOutputStream(getTagSizeEstimate(tag));
 
-                    byte[] data = nos.toByteArray();
-                    var compressor = LZ4Factory.fastestInstance()
-                        .fastCompressor();
-
-                    ByteBuffer compressed = ByteBuffer.allocate(8 + compressor.maxCompressedLength(data.length))
-                        .order(ByteOrder.LITTLE_ENDIAN);
-
-                    int compLen = compressor.compress(data, 0, data.length, compressed.array(), 8);
-
-                    compressed.putInt(0, LZ4_MAGIC_NUMBER);
-                    compressed.putInt(4, data.length);
-                    compressed.limit(8 + compLen);
-
-                    return compressed;
+                try (DataOutputStream dos = new DataOutputStream(nos)) {
+                    CompressedStreamTools.write(tag, dos);
                 }
+
+                ByteBuffer data = nos.toByteBuffer();
+
+                var compressor = LZ4Factory.fastestInstance()
+                    .fastCompressor();
+
+                ByteBuffer compressed = ByteBuffer.allocate(8 + compressor.maxCompressedLength(data.capacity()))
+                    .order(ByteOrder.LITTLE_ENDIAN);
+
+                int compLen = compressor.compress(data, 0, data.capacity(), compressed, 8, compressed.capacity() - 8);
+
+                compressed.putInt(0, LZ4_MAGIC_NUMBER);
+                compressed.putInt(4, data.capacity());
+                compressed.limit(8 + compLen);
+
+                return compressed;
             }
             case NONE -> {
-                try (ByteArrayOutputStream nos = new ByteArrayOutputStream(getTagSizeEstimate(tag))) {
-                    try (DataOutputStream dos = new DataOutputStream(nos)) {
-                        dos.writeLong(Long.reverseBytes(NONE_MAGIC_NUMBER_UUID.getLeastSignificantBits()));
-                        dos.writeLong(Long.reverseBytes(NONE_MAGIC_NUMBER_UUID.getMostSignificantBits()));
+                ByteBufferOutputStream nos = new ByteBufferOutputStream(getTagSizeEstimate(tag));
 
-                        CompressedStreamTools.write(tag, dos);
-                    }
+                try (DataOutputStream dos = new DataOutputStream(nos)) {
+                    dos.writeLong(Long.reverseBytes(NONE_MAGIC_NUMBER_UUID.getLeastSignificantBits()));
+                    dos.writeLong(Long.reverseBytes(NONE_MAGIC_NUMBER_UUID.getMostSignificantBits()));
 
-                    return ByteBuffer.wrap(nos.toByteArray());
+                    CompressedStreamTools.write(tag, dos);
                 }
+
+                return nos.toByteBuffer();
             }
             default -> {
                 throw new AssertionError("Illegal compression level: " + compression);
@@ -202,7 +204,7 @@ public class CCNBTUtils {
 
         private final byte[] pooled;
 
-        public GZIPOutputStream2(ByteArrayOutputStream nos) throws IOException {
+        public GZIPOutputStream2(OutputStream nos) throws IOException {
             super(nos);
             pooled = new byte[1];
         }
