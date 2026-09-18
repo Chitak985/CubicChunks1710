@@ -72,6 +72,22 @@ public enum Mixins implements IMixins {
         .addCommonMixins("common.vanillaclient.MixinS01PacketJoinGame")
         .setPhase(Phase.EARLY)
         .setApplyIf(() -> true)),
+    MIXIN_C07_HEIGHT_LIMITS(new MixinBuilder("Changing packet C07 to read and write full integer Y values.")
+        .addCommonMixins("common.MixinC07PacketPlayerDigging")
+        .setPhase(Phase.EARLY)
+        .setApplyIf(() -> true)),
+    MIXIN_C08_HEIGHT_LIMITS(new MixinBuilder("Changing packet C08 to read and write full integer Y values.")
+        .addCommonMixins("common.MixinC08PacketPlayerBlockPlacement")
+        .setPhase(Phase.EARLY)
+        .setApplyIf(() -> true)),
+    MIXIN_S28_HEIGHT_LIMITS(new MixinBuilder("Changing packet S28 to read and write full integer Y values.")
+        .addCommonMixins("common.MixinS28PacketEffect")
+        .setPhase(Phase.EARLY)
+        .setApplyIf(() -> true)),
+    MIXIN_S07PACKET_RESPAWN(new MixinBuilder("Giving respawn packets info to initialize cubicWorlds for clients.")
+        .addCommonMixins("common.vanillaclient.MixinS07PacketRespawn")
+        .setPhase(Phase.EARLY)
+        .setApplyIf(() -> true)),
     MIXIN_OVERWORLD_GENERATOR(new MixinBuilder("Modify overworld chunk generator")
         .addCommonMixins("common.worldgen.MixinChunkProviderGenerate")
         .setPhase(Phase.EARLY)
@@ -128,10 +144,10 @@ public enum Mixins implements IMixins {
         new MixinBuilder("Mixin for world settings allowing cubes.").addCommonMixins("common.MixinWorldSettings")
             .setPhase(Phase.EARLY)
             .setApplyIf(() -> true)),
-    MIXIN_WORLD_PROVIDER(
-        new MixinBuilder("Implementing ICubicWorldProvider.").addCommonMixins("common.MixinWorldProvider")
-            .setPhase(Phase.EARLY)
-            .setApplyIf(() -> true)),
+    MIXIN_WORLD_PROVIDER(new MixinBuilder("Intercept WorldProvider getActualHeight + player spawning.")
+        .addCommonMixins("common.MixinWorldProvider")
+        .setPhase(Phase.EARLY)
+        .setApplyIf(() -> true)),
     MIXIN_WORLD(new MixinBuilder("Implementing ICubicWorld.").addCommonMixins("common.MixinWorld")
         .setPhase(Phase.EARLY)
         .setApplyIf(() -> true)),
@@ -319,6 +335,11 @@ public enum Mixins implements IMixins {
             .setPhase(Phase.LATE)
             .addRequiredMod(Mods.ChunkAPI)
             .setApplyIf(() -> true)),
+    MIXIN_JOURNEYMAP_RENDER_GUARD(new MixinBuilder("Discard incomplete JourneyMap surface renders")
+        .addClientMixins("mod.MixinJourneyMapChunkPainter", "mod.MixinJourneyMapChunkRenderController")
+        .setPhase(Phase.LATE)
+        .addRequiredMod(Mods.JourneyMap)
+        .setApplyIf(() -> true)),
     MIXIN_AE2_PLATFORM_SEND_CHUNK(
         new MixinBuilder("Route AE2 chunk section resends through the cubic synchronization protocol")
             .addCommonMixins("mod.MixinAE2Platform")
