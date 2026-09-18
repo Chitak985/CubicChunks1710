@@ -147,16 +147,10 @@ public class CCNBTUtils {
             case NBT.TAG_SHORT -> {
                 return 3;
             }
-            case NBT.TAG_INT -> {
+            case NBT.TAG_INT, NBT.TAG_FLOAT -> {
                 return 5;
             }
-            case NBT.TAG_LONG -> {
-                return 9;
-            }
-            case NBT.TAG_FLOAT -> {
-                return 5;
-            }
-            case NBT.TAG_DOUBLE -> {
+            case NBT.TAG_LONG, NBT.TAG_DOUBLE -> {
                 return 9;
             }
             case NBT.TAG_BYTE_ARRAY -> {
@@ -176,6 +170,7 @@ public class CCNBTUtils {
 
                 int size = 5;
 
+                //noinspection ForLoopReplaceableByForEach
                 for (int i = 0; i < len; i++) {
                     size += getTagSizeEstimate(list.get(i));
                 }
