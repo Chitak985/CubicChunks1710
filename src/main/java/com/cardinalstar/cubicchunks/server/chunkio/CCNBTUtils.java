@@ -185,14 +185,14 @@ public class CCNBTUtils {
             case NBT.TAG_COMPOUND -> {
                 var map = ((AccessorNBTTagCompound) tag).getTagMap();
 
-                MutableInt size = new MutableInt(5);
+                int size = 5;
 
-                map.forEach((key, value) -> {
-                    size.add(key.length() * 2);
-                    size.add(getTagSizeEstimate(value));
-                });
+                for (var e : map.entrySet()) {
+                    size += e.getKey().length() * 2;
+                    size += getTagSizeEstimate(e.getValue());
+                }
 
-                return size.intValue();
+                return size;
             }
             default -> {
                 return 1;
